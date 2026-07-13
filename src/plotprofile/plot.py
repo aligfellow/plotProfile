@@ -119,6 +119,12 @@ class ReactionProfilePlotter:
             self.x_label = style_dict.get('x_label', None)
             self.y_label = style_dict.get('y_label', None)
             self.x_indices = bool(style_dict.get('x_indices', False))
+            # A reaction profile between stationary points is a schematic, and the
+            # bezier reads well. A scan is *data*, and the smoothing invents points
+            # that were never computed. Set linear=True to join the points honestly.
+            self.linear = bool(style_dict.get('linear', False))
+            self.y2_label = style_dict.get('y2_label', None)
+            self.y2_colors = style_dict.get('y2_colors', 'plasma')
         except Exception as e:
             logger.error(f"Invalid style parameters: {e}")
             raise ValueError(f"Invalid style parameters: {e}")
@@ -196,7 +202,39 @@ class ReactionProfilePlotter:
                 raise TypeError(f"Invalid energy value at index {i}{label_str}: {val} (type {type(val)})")
         return valid_list
 
-    def plot(self, energy_data, filename=None, annotations=None, point_labels=None, file_format='png', dpi=600, include_keys=None, exclude_from_legend=[]):
+    def _draw_secondary(self, ax, secondary, exclude_from_legend):
+        """Draw a second set of series on a right-hand y-axis.
+
+        For quantities that share the reaction coordinate but not the unit -- bond
+        lengths against energy, say. Two scales on one plot are easy to misread, so
+        this is opt-in and the axis is always labelled.
+        """
+        ax2 = ax.twinx()
+        labels = list(secondary.keys())
+        colors = self._resolve_colors(self.y2_colors, len(labels))
+        handles = []
+
+        for i, label in enumerate(labels):
+            values = [np.nan if v is None else float(v) for v in secondary[label]]
+            xs, ys = generate_coordinates(values)
+            if len(xs) < 2:
+                logger.warning(f"Not enough points to draw secondary series '{label}'. Skipping.")
+                continue
+            ax2.plot(xs, ys, color=colors[i], linewidth=self.line_width,
+                     linestyle='dashed', dashes=(self.line_width, self.dash_spacing),
+                     dash_capstyle='round', zorder=1)
+            ax2.plot(xs, ys, 'o', color=colors[i], markersize=self.marker_size,
+                     markerfacecolor='white', markeredgewidth=self.line_width * 0.6, zorder=2)
+            handles.append(Line2D([0], [0], color=colors[i], linewidth=self.line_width,
+                                  linestyle='dashed', label=label, dash_capstyle='round'))
+
+        if self.y2_label:
+            ax2.set_ylabel(self.y2_label, fontproperties=self.font_properties)
+        ax2.tick_params(axis='y', labelsize=self.font_size, width=self.axis_linewidth)
+        ax2.margins(y=0.15)
+        return ax2, [h for h in handles if h.get_label() not in exclude_from_legend]
+
+    def plot(self, energy_data, filename=None, annotations=None, point_labels=None, file_format='png', dpi=600, include_keys=None, exclude_from_legend=[], secondary=None):
 
         processed_dict = {}
         if isinstance(energy_data, dict):
@@ -333,20 +371,28 @@ class ReactionProfilePlotter:
 
             path = Path(verts, codes)
             label = labels[len(coords) - 1 - i]
-            
-            verts = np.array(verts)
-            all_points = []
-            for j in range(0, len(verts) - 3, 3):
-                P0 = verts[j]
-                P1 = verts[j + 1]
-                P2 = verts[j + 2]
-                P3 = verts[j + 3]
-                bezier_points = cubic_bezier_points(P0, P1, P2, P3)
-                all_points.append(bezier_points)
-            if len(all_points) == 0:
-                logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
-                continue
-            all_points = np.vstack(all_points)
+
+            if self.linear:
+                # Join the computed points and nothing else. A smoothed curve
+                # through scan data draws points that were never calculated.
+                all_points = np.array(processed_points, dtype=float)
+                if len(all_points) < 2:
+                    logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
+                    continue
+            else:
+                verts = np.array(verts)
+                all_points = []
+                for j in range(0, len(verts) - 3, 3):
+                    P0 = verts[j]
+                    P1 = verts[j + 1]
+                    P2 = verts[j + 2]
+                    P3 = verts[j + 3]
+                    bezier_points = cubic_bezier_points(P0, P1, P2, P3)
+                    all_points.append(bezier_points)
+                if len(all_points) == 0:
+                    logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
+                    continue
+                all_points = np.vstack(all_points)
             ax.plot(all_points[:, 0], all_points[:, 1], color=light_colors[i], linewidth=self.line_width, dashes=(self.line_width,self.dash_spacing) if linestyle == 'dashed' else (self.line_width,0), linestyle=linestyle, dash_capstyle='round')
             if label not in exclude_from_legend:
                 legend_line = Line2D(
@@ -545,6 +591,11 @@ class ReactionProfilePlotter:
                 padding = 2 * buffer_space
                 ax.set_ylim(y_min - padding, y_max + padding)
 
+        # --- secondary y-axis
+        secondary_handles = []
+        if secondary:
+            _, secondary_handles = self._draw_secondary(ax, secondary, exclude_from_legend)
+
         # --- legend
         if self.show_legend:
             handles, labels_ = [], []
@@ -552,8 +603,13 @@ class ReactionProfilePlotter:
                 if label and not label.startswith('_unlabeled_'):
                     handles.append(handle)
                     labels_.append(label)
+            handles, labels_ = handles[::-1], labels_[::-1]
+            # Series on the right-hand axis belong in the same legend as those on
+            # the left, or the reader cannot tell which scale a line is read against.
+            handles += secondary_handles
+            labels_ += [h.get_label() for h in secondary_handles]
             if handles:
-                ax.legend(handles[::-1], labels_[::-1], loc='best', prop=self.font_properties)
+                ax.legend(handles, labels_, loc='best', prop=self.font_properties)
 
         # --- segment annotations with double-headed arrows
         if self.annotations:
