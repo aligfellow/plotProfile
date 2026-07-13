@@ -119,10 +119,16 @@ class ReactionProfilePlotter:
             self.x_label = style_dict.get('x_label', None)
             self.y_label = style_dict.get('y_label', None)
             self.x_indices = bool(style_dict.get('x_indices', False))
-            # A reaction profile between stationary points is a schematic, and the
-            # bezier reads well. A scan is *data*, and the smoothing invents points
-            # that were never computed. Set linear=True to join the points honestly.
-            self.linear = bool(style_dict.get('linear', False))
+            # 'best' can land on top of the data when there are many series.
+            self.legend_loc = style_dict.get('legend_loc', 'best')
+            self.legend_outside = bool(style_dict.get('legend_outside', False))
+            # How far right of the axes the outside legend sits. Needs to clear a
+            # secondary axis and its label, if there is one.
+            self.legend_anchor = float(style_dict.get('legend_anchor', 1.02))
+            # Keep the *axes* square, whatever the figure has to be to fit a
+            # legend beside it. Without this, moving the legend out squashes the
+            # plot into a rectangle.
+            self.square = bool(style_dict.get('square', False))
             self.y2_label = style_dict.get('y2_label', None)
             self.y2_colors = style_dict.get('y2_colors', 'plasma')
         except Exception as e:
@@ -202,6 +208,24 @@ class ReactionProfilePlotter:
                 raise TypeError(f"Invalid energy value at index {i}{label_str}: {val} (type {type(val)})")
         return valid_list
 
+    def _curve(self, points):
+        """Join points with a bezier of the configured curviness.
+
+        curviness=0 puts both control points on the segment endpoints, which makes
+        the curve exactly the straight line -- so a scan can be joined honestly,
+        without inventing points that were never computed, using the same code path
+        as a schematic profile.
+        """
+        points = [(float(x), float(y)) for x, y in points]
+        segments = []
+        for (x0, y0), (x1, y1) in zip(points[:-1], points[1:]):
+            P0 = np.array([x0, y0])
+            P1 = np.array([x0 + self.curviness * (x1 - x0), y0])
+            P2 = np.array([x1 - self.curviness * (x1 - x0), y1])
+            P3 = np.array([x1, y1])
+            segments.append(cubic_bezier_points(P0, P1, P2, P3))
+        return np.vstack(segments)
+
     def _draw_secondary(self, ax, secondary, exclude_from_legend):
         """Draw a second set of series on a right-hand y-axis.
 
@@ -220,7 +244,8 @@ class ReactionProfilePlotter:
             if len(xs) < 2:
                 logger.warning(f"Not enough points to draw secondary series '{label}'. Skipping.")
                 continue
-            ax2.plot(xs, ys, color=colors[i], linewidth=self.line_width,
+            curve = self._curve(list(zip(xs, ys)))
+            ax2.plot(curve[:, 0], curve[:, 1], color=colors[i], linewidth=self.line_width,
                      linestyle='dashed', dashes=(self.line_width, self.dash_spacing),
                      dash_capstyle='round', zorder=1)
             ax2.plot(xs, ys, 'o', color=colors[i], markersize=self.marker_size,
@@ -372,27 +397,19 @@ class ReactionProfilePlotter:
             path = Path(verts, codes)
             label = labels[len(coords) - 1 - i]
 
-            if self.linear:
-                # Join the computed points and nothing else. A smoothed curve
-                # through scan data draws points that were never calculated.
-                all_points = np.array(processed_points, dtype=float)
-                if len(all_points) < 2:
-                    logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
-                    continue
-            else:
-                verts = np.array(verts)
-                all_points = []
-                for j in range(0, len(verts) - 3, 3):
-                    P0 = verts[j]
-                    P1 = verts[j + 1]
-                    P2 = verts[j + 2]
-                    P3 = verts[j + 3]
-                    bezier_points = cubic_bezier_points(P0, P1, P2, P3)
-                    all_points.append(bezier_points)
-                if len(all_points) == 0:
-                    logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
-                    continue
-                all_points = np.vstack(all_points)
+            verts = np.array(verts)
+            all_points = []
+            for j in range(0, len(verts) - 3, 3):
+                P0 = verts[j]
+                P1 = verts[j + 1]
+                P2 = verts[j + 2]
+                P3 = verts[j + 3]
+                bezier_points = cubic_bezier_points(P0, P1, P2, P3)
+                all_points.append(bezier_points)
+            if len(all_points) == 0:
+                logger.warning(f"No valid points to draw curve for label '{label}'. Skipping.")
+                continue
+            all_points = np.vstack(all_points)
             ax.plot(all_points[:, 0], all_points[:, 1], color=light_colors[i], linewidth=self.line_width, dashes=(self.line_width,self.dash_spacing) if linestyle == 'dashed' else (self.line_width,0), linestyle=linestyle, dash_capstyle='round')
             if label not in exclude_from_legend:
                 legend_line = Line2D(
@@ -609,7 +626,12 @@ class ReactionProfilePlotter:
             handles += secondary_handles
             labels_ += [h.get_label() for h in secondary_handles]
             if handles:
-                ax.legend(handles, labels_, loc='best', prop=self.font_properties)
+                if self.legend_outside:
+                    ax.legend(handles, labels_, loc='center left',
+                              bbox_to_anchor=(self.legend_anchor, 0.5),
+                              frameon=False, prop=self.font_properties)
+                else:
+                    ax.legend(handles, labels_, loc=self.legend_loc, prop=self.font_properties)
 
         # --- segment annotations with double-headed arrows
         if self.annotations:
@@ -804,6 +826,9 @@ class ReactionProfilePlotter:
         else:
             ax.set_xlabel(None)
             ax.set_ylabel(None)
+
+        if self.square:
+            ax.set_box_aspect(1)
 
         fig.tight_layout()
 
