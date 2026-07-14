@@ -1,0 +1,9 @@
+{
+  "curviness": 0.42,
+  "point_type": "hollow",
+  "linestyle": {"Pathway B": "--"},
+  "axes": "box",
+  "units": "kcal",
+  "energy": "G",
+  "legend": {"loc": "upper right", "prop": {"weight": "normal"}}
+}
