@@ -1,49 +1,58 @@
 # Configuration file for the Sphinx documentation builder.
-
+#
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'plotprofile'
-copyright = '2025, A. S. Goodfellow'
-author = 'A. S. Goodfellow'
-release = '1.0.9'
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _version
+
+project = "plotprofile"
+copyright = "2025, Alister S. Goodfellow"
+author = "Alister S. Goodfellow"
+try:
+    release = _version("plotprofile")
+except PackageNotFoundError:  # docs built without installing the package
+    release = ""
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
-    "sphinx_autodoc_typehints",
-    "myst_parser",
+    "sphinx.ext.autodoc",  # pulls docstrings into docs automatically
+    "sphinx.ext.napoleon",  # understands numpy/Google style docstrings
+    "sphinx.ext.viewcode",  # adds [source] links to API pages
+    "sphinx_autodoc_typehints",  # renders type hints nicely
+    "myst_parser",  # lets you write pages in Markdown as well as RST
 ]
 
-autosectionlabel_prefix_document = True
-
-templates_path = ['_templates']
+templates_path = ["_templates"]
 exclude_patterns = []
 
+suppress_warnings = ["ref.python", "autodoc.duplicate_object_description"]
+
+myst_heading_anchors = 3
+
 source_suffix = {
-    '.rst': 'restructuredtext',
-    '.txt': 'markdown',
-    '.md': 'markdown',
+    ".rst": "restructuredtext",
+    ".txt": "markdown",
+    ".md": "markdown",
 }
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'furo' # sphinx_rtd_theme
-html_static_path = ['_static']
-
+html_theme = "furo"
+html_static_path = ["_static"]
 
 # ---------------------------------------------------
 
-import os
+import sys
 from pathlib import Path
 
-# Path to repo root
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# Path to repo root: this file is docs/source/conf.py, so the root is two levels up.
+# Only a fallback for a local build; .readthedocs.yaml installs the package itself.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "src"))
