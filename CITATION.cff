@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "plotprofile"
+version: 1.1.1
+url: "https://github.com/aligfellow/plotprofile"
+authors:
+  - given-names: "Alister S."
+    family-names: "Goodfellow"

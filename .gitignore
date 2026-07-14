@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/ 
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -14,17 +14,25 @@ venv/
 ENV/
 env/
 
+# Claude
+.claude*
+CLAUDE*
+*plan*
+*PLAN*
+
 # VSCode config (optional)
 .vscode/
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# tmp_test dir
-tmp_test/ 
-
 # Pytest cache
 .pytest_cache/
+ruff.out
+ty.out
+
+# ruff
+.ruff_cache/
 
 # mypy
 .mypy_cache/
@@ -32,6 +40,8 @@ tmp_test/
 # Coverage reports
 htmlcov/
 .coverage
+.coverage.*
+coverage.xml
 
 # macOS files
 .DS_Store
@@ -48,3 +58,6 @@ output/
 
 # Ignore tmp test dir for local testing
 tmp_test/
+
+# Sphinx build output
+docs/_build/

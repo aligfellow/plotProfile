@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v0.1.9
+_src_path: gh:aligfellow/python-template
+author: Alister S. Goodfellow
+check_magic_numbers: false
+ci_python_version: '3.14'
+description: Plot reaction profiles with customizable curves and labels
+github_user: aligfellow
+include_citation: true
+include_cli: true
+package_name: plotprofile
+project_name: plotprofile
+python_version: '3.10'
+year: '2025'
